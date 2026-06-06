@@ -62,7 +62,7 @@ const getTableColumns = async (connectionId: string, tableName: string, schema?:
       tableName,
       ...(schema ? { schema } : {}),
     });
-    
+
     if (!Array.isArray(cols)) {
       console.warn(`get_columns returned non-array for table ${tableName}`, cols);
       return [];
@@ -74,12 +74,16 @@ const getTableColumns = async (connectionId: string, tableName: string, schema?:
       detail: c.data_type,
     }));
 
-    columnsCache.set(cacheKey, {
-      data: simpleCols,
-      timestamp: Date.now()
-    });
-    
-    cleanupCache();
+    // Don't cache empty results — they likely reflect a transient failure
+    // (connection not ready, schema mismatch) rather than a genuinely empty table.
+    // An uncached miss retries the backend on the next trigger, which is cheap.
+    if (simpleCols.length > 0) {
+      columnsCache.set(cacheKey, {
+        data: simpleCols,
+        timestamp: Date.now()
+      });
+      cleanupCache();
+    }
     return simpleCols;
   } catch (e) {
     console.error(`Failed to fetch columns for autocomplete: ${tableName}`, e);
@@ -110,7 +114,7 @@ export const registerSqlAutocomplete = (
       if (!connectionId) return { suggestions: [] };
 
       const wordUntil = model.getWordUntilPosition(position);
-      
+
       const range = {
         startLineNumber: position.lineNumber,
         endLineNumber: position.lineNumber,
@@ -129,6 +133,7 @@ export const registerSqlAutocomplete = (
       // Get current statement context
       const currentStatement = getCurrentStatement(model, position);
       const tableAliases = parseTablesFromQuery(currentStatement);
+
 
       // ============================================
       // 1. DOT TRIGGER (table.column or alias.column)
@@ -149,7 +154,8 @@ export const registerSqlAutocomplete = (
         }
         
         if (actualTableName) {
-          const columns = await getTableColumns(connectionId, actualTableName, schema);
+          const foundTable = tables.find(t => t.name.toLowerCase() === typedName);
+          const columns = await getTableColumns(connectionId, actualTableName, foundTable?.schema ?? schema);
           
           // Calculate range for column name after dot
           const columnRange = {
@@ -187,8 +193,11 @@ export const registerSqlAutocomplete = (
       if (tableAliases && tableAliases.size > 0) {
         // User is inside a query with FROM/JOIN - suggest columns from those tables
         const tableNames = Array.from(new Set(tableAliases.values()));
+        // Prefer the TableInfo from the loaded list (original casing, full metadata).
+        // Fall back to a minimal synthetic entry from the parsed name so columns can
+        // still be fetched when the tables list hasn't finished loading yet.
         const matchingTables = tableNames
-          .map(name => tables.find(t => t.name.toLowerCase() === name.toLowerCase()))
+          .map(name => tables.find(t => t.name.toLowerCase() === name.toLowerCase()) ?? { name })
           .filter(Boolean) as TableInfo[];
         
         // Limit parallel fetches to prevent memory spikes
@@ -198,7 +207,7 @@ export const registerSqlAutocomplete = (
         }
         
         const results = await Promise.all(
-          matchingTables.map(t => getTableColumns(connectionId, t.name, schema))
+          matchingTables.map(t => getTableColumns(connectionId, t.name, t.schema ?? schema))
         );
         
         const seenColumns = new Set<string>();
@@ -233,24 +242,15 @@ export const registerSqlAutocomplete = (
       }
 
       // ============================================
-      // 3. KEYWORD SUGGESTIONS (only if no context columns)
+      // 3. KEYWORD SUGGESTIONS
       // ============================================
-      let keywordSuggestions: Array<{
-        label: string;
-        kind: number;
-        insertText: string;
-        range: { startLineNumber: number; endLineNumber: number; startColumn: number; endColumn: number };
-        sortText: string;
-      }> = [];
-      if (contextColumnSuggestions.length === 0) {
-        keywordSuggestions = SQL_KEYWORDS.map((kw) => ({
-          label: kw,
-          kind: monaco.languages.CompletionItemKind.Keyword,
-          insertText: kw,
-          range,
-          sortText: `2_${kw}`
-        }));
-      }
+      const keywordSuggestions = SQL_KEYWORDS.map((kw) => ({
+        label: kw,
+        kind: monaco.languages.CompletionItemKind.Keyword,
+        insertText: kw,
+        range,
+        sortText: `2_${kw}`
+      }));
 
       // ============================================
       // 4. TABLE SUGGESTIONS

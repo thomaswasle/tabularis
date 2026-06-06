@@ -1,29 +1,41 @@
 // SQL Analysis Utilities - Pure logic functions for parsing and analyzing SQL
 
+// SQL reserved words that are never valid unquoted table aliases
+const SQL_RESERVED = new Set([
+  'where', 'on', 'set', 'having', 'group', 'order', 'limit', 'offset',
+  'join', 'left', 'right', 'inner', 'outer', 'cross', 'union', 'intersect',
+  'except', 'select', 'from', 'into', 'values', 'update', 'delete', 'insert',
+  'create', 'drop', 'alter', 'and', 'or', 'not', 'is', 'in', 'between',
+  'like', 'as', 'distinct', 'case', 'when', 'then', 'else', 'end', 'by',
+  'asc', 'desc', 'null', 'with', 'exists', 'all', 'any',
+]);
+
 // Optimized table parser - early exit and minimal allocations
 export const parseTablesFromQuery = (sql: string): Map<string, string> | null => {
   if (!sql || sql.length === 0) return null;
-  
+
   const lowerSql = sql.toLowerCase();
-  
+
   // Quick check if query contains FROM/JOIN keywords
   if (!lowerSql.includes('from') && !lowerSql.includes('join')) {
     return null;
   }
-  
+
   const tableMap = new Map<string, string>();
   const fromPattern = /(?:from|join)\s+(?:`)?([a-z_][a-z0-9_]*)(?:`)?(?:\s+(?:as\s+)?(?:`)?([a-z_][a-z0-9_]*)(?:`)?)?/gi;
-  
+
   let match;
   let matchCount = 0;
   const MAX_MATCHES = 10; // Prevent regex catastrophic backtracking
-  
+
   while ((match = fromPattern.exec(lowerSql)) !== null && matchCount++ < MAX_MATCHES) {
     const tableName = match[1];
-    const alias = match[2] || tableName;
+    const rawAlias = match[2];
+    // Ignore captured word if it's a SQL keyword (e.g. WHERE captured after table name)
+    const alias = (rawAlias && !SQL_RESERVED.has(rawAlias)) ? rawAlias : tableName;
     tableMap.set(alias, tableName);
   }
-  
+
   return tableMap.size > 0 ? tableMap : null;
 };
 
