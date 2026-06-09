@@ -48,6 +48,36 @@ describe('sqlAnalysis utils', () => {
         expect(result?.get('u')?.name).toBe('users');
         expect(result?.get('p')?.name).toBe('products');
     });
+
+    it('does not register a keyword as an alias when it follows a table name', () => {
+      // Unaliased JOIN: both tables keyed by their own name, JOIN not an alias.
+      const r = parseTablesFromQuery('SELECT * FROM users JOIN orders');
+      expect(r?.get('users')?.name).toBe('users');
+      expect(r?.get('orders')?.name).toBe('orders');
+      expect(r?.has('join')).toBe(false);
+
+      // JOIN-type keywords must not become aliases of the preceding table.
+      const left = parseTablesFromQuery('SELECT * FROM a LEFT JOIN b ON a.id = b.a_id');
+      expect(left?.get('a')?.name).toBe('a');
+      expect(left?.get('b')?.name).toBe('b');
+      expect(left?.has('left')).toBe(false);
+
+      const natural = parseTablesFromQuery('SELECT * FROM t NATURAL JOIN u');
+      expect(natural?.get('t')?.name).toBe('t');
+      expect(natural?.get('u')?.name).toBe('u');
+      expect(natural?.has('natural')).toBe(false);
+
+      // Trailing clause keywords that can legally follow a table name.
+      const forUpdate = parseTablesFromQuery('SELECT * FROM orders FOR UPDATE');
+      expect(forUpdate?.get('orders')?.name).toBe('orders');
+      expect(forUpdate?.has('for')).toBe(false);
+    });
+
+    it('keeps schema on qualified refs across a JOIN', () => {
+      const r = parseTablesFromQuery('SELECT * FROM db1.users JOIN db2.orders ON 1 = 1');
+      expect(r?.get('users')).toEqual({ name: 'users', schema: 'db1' });
+      expect(r?.get('orders')).toEqual({ name: 'orders', schema: 'db2' });
+    });
   });
 
   describe('getCurrentStatement', () => {

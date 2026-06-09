@@ -32,8 +32,11 @@ export const parseTablesFromQuery = (sql: string): Map<string, ParsedTableRef> |
   if (!fromSection) return null;
 
   const tableMap = new Map<string, ParsedTableRef>();
-  // Groups: 1=first-id (schema when group 2 present, else table), 2=table (qualified), 3=alias
-  const fromPattern = /(?:from|join)\s+`?([a-z_][a-z0-9_]*)`?(?:\.`?([a-z_][a-z0-9_]*)`?)?(?:\s+(?:as\s+)?`?([a-z_][a-z0-9_]*)`?)?/gi;
+  // Groups: 1=first-id (schema when group 2 present, else table), 2=table (qualified), 3=alias.
+  // The negative-lookahead stops the optional alias group from swallowing a keyword that
+  // legally follows a table name (JOIN/LEFT/NATURAL/FOR/…). Without it the keyword is both
+  // mis-registered as an alias and consumed, dropping the table that follows it.
+  const fromPattern = /(?:from|join)\s+`?([a-z_][a-z0-9_]*)`?(?:\.`?([a-z_][a-z0-9_]*)`?)?(?:\s+(?:as\s+)?`?(?!(?:join|left|right|inner|outer|cross|natural|full|on|using|where|group|order|having|limit|offset|union|intersect|except|for|fetch|window|lateral|tablesample|qualify|straight_join)\b)([a-z_][a-z0-9_]*)`?)?/gi;
 
   let match;
   let matchCount = 0;
