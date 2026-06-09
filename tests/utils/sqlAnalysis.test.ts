@@ -12,41 +12,41 @@ describe('sqlAnalysis utils', () => {
     it('should extract simple table name', () => {
       const result = parseTablesFromQuery('SELECT * FROM users');
       expect(result).not.toBeNull();
-      expect(result?.get('users')).toBe('users');
+      expect(result?.get('users')?.name).toBe('users');
     });
 
     it('should extract table with alias', () => {
       const result = parseTablesFromQuery('SELECT * FROM users u');
-      expect(result?.get('u')).toBe('users');
+      expect(result?.get('u')?.name).toBe('users');
     });
 
     it('should extract table with AS alias', () => {
       const result = parseTablesFromQuery('SELECT * FROM users AS u');
-      expect(result?.get('u')).toBe('users');
+      expect(result?.get('u')?.name).toBe('users');
     });
 
     it('should extract multiple tables (JOIN)', () => {
       const sql = 'SELECT * FROM users u JOIN posts p ON u.id = p.user_id';
       const result = parseTablesFromQuery(sql);
-      expect(result?.get('u')).toBe('users');
-      expect(result?.get('p')).toBe('posts');
+      expect(result?.get('u')?.name).toBe('users');
+      expect(result?.get('p')?.name).toBe('posts');
     });
 
     it('should handle backticks', () => {
       const result = parseTablesFromQuery('SELECT * FROM `my_table` `mt`');
-      expect(result?.get('mt')).toBe('my_table');
+      expect(result?.get('mt')?.name).toBe('my_table');
     });
 
     it('should handle complex joins', () => {
         const sql = `
-            SELECT * FROM orders o 
+            SELECT * FROM orders o
             LEFT JOIN users u ON o.user_id = u.id
             INNER JOIN products p ON o.prod_id = p.id
         `;
         const result = parseTablesFromQuery(sql);
-        expect(result?.get('o')).toBe('orders');
-        expect(result?.get('u')).toBe('users');
-        expect(result?.get('p')).toBe('products');
+        expect(result?.get('o')?.name).toBe('orders');
+        expect(result?.get('u')?.name).toBe('users');
+        expect(result?.get('p')?.name).toBe('products');
     });
   });
 
