@@ -608,11 +608,10 @@ mod build_mysql_pk_where_tests {
     use std::collections::HashMap;
 
     #[test]
-    fn single_column_generates_correct_predicate() {
+    fn single_column_returns_correct_pair() {
         let mut pk_map = HashMap::new();
         pk_map.insert("id".to_string(), serde_json::json!(42));
-        let (sql, pairs) = build_mysql_pk_where(&pk_map).unwrap();
-        assert_eq!(sql, "`id` = ?");
+        let pairs = build_mysql_pk_where(&pk_map).unwrap();
         assert_eq!(pairs.len(), 1);
         assert_eq!(pairs[0].0, "id");
         assert_eq!(pairs[0].1, serde_json::json!(42));
@@ -623,8 +622,7 @@ mod build_mysql_pk_where_tests {
         let mut pk_map = HashMap::new();
         pk_map.insert("z_col".to_string(), serde_json::json!(1));
         pk_map.insert("a_col".to_string(), serde_json::json!(2));
-        let (sql, pairs) = build_mysql_pk_where(&pk_map).unwrap();
-        assert_eq!(sql, "`a_col` = ? AND `z_col` = ?");
+        let pairs = build_mysql_pk_where(&pk_map).unwrap();
         assert_eq!(pairs[0].0, "a_col");
         assert_eq!(pairs[1].0, "z_col");
     }
@@ -633,13 +631,5 @@ mod build_mysql_pk_where_tests {
     fn empty_pk_map_is_rejected() {
         let pk_map: HashMap<String, serde_json::Value> = HashMap::new();
         assert!(build_mysql_pk_where(&pk_map).is_err());
-    }
-
-    #[test]
-    fn backtick_in_column_name_is_escaped() {
-        let mut pk_map = HashMap::new();
-        pk_map.insert("a`b".to_string(), serde_json::json!(1));
-        let (sql, _) = build_mysql_pk_where(&pk_map).unwrap();
-        assert_eq!(sql, "`a``b` = ?");
     }
 }

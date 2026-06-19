@@ -321,11 +321,10 @@ pub async fn get_indexes(
         .collect())
 }
 
-/// Build a ` WHERE col1 = ? AND col2 = ?` fragment for a pk_map.
-/// Returns the WHERE clause string and sorted (col, val) pairs for binding.
+/// Sort the pk_map into a deterministic (col, val) vec for use with QueryBuilder.
 fn build_mysql_pk_where(
     pk_map: &HashMap<String, serde_json::Value>,
-) -> Result<(String, Vec<(String, serde_json::Value)>), String> {
+) -> Result<Vec<(String, serde_json::Value)>, String> {
     if pk_map.is_empty() {
         return Err("pk_map must not be empty".into());
     }
@@ -334,11 +333,7 @@ fn build_mysql_pk_where(
         .map(|(k, v)| (k.clone(), v.clone()))
         .collect();
     pairs.sort_by(|a, b| a.0.cmp(&b.0));
-    let predicates: Vec<String> = pairs
-        .iter()
-        .map(|(col, _)| format!("`{}` = ?", escape_identifier(col)))
-        .collect();
-    Ok((predicates.join(" AND "), pairs))
+    Ok(pairs)
 }
 
 
@@ -390,7 +385,7 @@ async fn mysql_fetch_one_with_pk(
     pk_map: &HashMap<String, serde_json::Value>,
 ) -> Result<sqlx::mysql::MySqlRow, String> {
     let pool = get_mysql_pool(params).await?;
-    let (_, pairs) = build_mysql_pk_where(pk_map)?;
+    let pairs = build_mysql_pk_where(pk_map)?;
     let mut first = true;
     let mut qb3 = sqlx::QueryBuilder::<sqlx::MySql>::new(format!("{} WHERE ", select_from));
     for (col, val) in &pairs {
@@ -430,7 +425,7 @@ async fn mysql_execute_with_pk(
     pk_map: &HashMap<String, serde_json::Value>,
 ) -> Result<u64, String> {
     let pool = get_mysql_pool(params).await?;
-    let (_, pairs) = build_mysql_pk_where(pk_map)?;
+    let pairs = build_mysql_pk_where(pk_map)?;
     let mut qb = sqlx::QueryBuilder::<sqlx::MySql>::new(format!("{} WHERE ", prefix));
     let mut first = true;
     for (col, val) in &pairs {
@@ -485,7 +480,7 @@ pub async fn update_record(
     max_blob_size: u64,
 ) -> Result<u64, String> {
     let pool = get_mysql_pool(params).await?;
-    let (_, pk_pairs) = build_mysql_pk_where(pk_map)?;
+    let pk_pairs = build_mysql_pk_where(pk_map)?;
 
     let mut qb = sqlx::QueryBuilder::new(format!(
         "UPDATE `{}` SET `{}` = ",
