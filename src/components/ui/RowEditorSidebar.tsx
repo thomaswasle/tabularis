@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react";
+import { useRef, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { X } from "lucide-react";
 import { FieldEditor } from "./FieldEditor";
@@ -51,6 +51,14 @@ export const RowEditorSidebar = ({
     initialData: rowData,
     onChange: (fieldName, value) => onChange(fieldName, value),
   });
+
+  const pkMap = useMemo(
+    () =>
+      pkColumns && pkColumns.length > 0
+        ? Object.fromEntries(pkColumns.map((col) => [col, rowData[col]]))
+        : undefined,
+    [pkColumns, rowData],
+  );
 
   // Refs to track field containers for scrolling
   const fieldRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -169,13 +177,7 @@ export const RowEditorSidebar = ({
                   isNullable={nullableColumns?.includes(column.name)}
                   connectionId={connectionId}
                   tableName={tableName}
-                  pkMap={
-                    pkColumns && pkColumns.length > 0
-                      ? Object.fromEntries(
-                          pkColumns.map((col) => [col, rowData[col]]),
-                        )
-                      : undefined
-                  }
+                  pkMap={pkMap}
                   schema={schema}
                 />
                 <SlotAnchor
