@@ -25,8 +25,8 @@ export function buildPkMap(
 
 /**
  * Produce a stable string key for a pk map to use as a pendingChanges key.
- * Single-column PKs use plain String(value) for backward compatibility.
- * Composite PKs use JSON.stringify with keys sorted for determinism.
+ * Keys are sorted alphabetically before serializing so the result is
+ * deterministic regardless of insertion order.
  */
 export function serializePkKey(pkMap: Record<string, unknown>): string {
   const entries = Object.entries(pkMap).sort(([a], [b]) =>
